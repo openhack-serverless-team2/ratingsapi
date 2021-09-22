@@ -9,6 +9,8 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System.Collections.Generic;
 using Microsoft.Azure.Cosmos;
+using System.Net.Http;
+using System.Net.Http.Headers;
 
 namespace FunctionApp2
 {
@@ -72,6 +74,7 @@ public class Rating
         public static string PrimaryKey = "N2TbALiTMNFEjzJtPtzXgQVFTWTLyw1pAs9tisEwM6P4FSktqhY4oqqSaHqmkAkeU4gdUEyvGhAF9TsGVC2TTQ==";
         public static string databaseId = "hackbase";
         public static string containerId = "ratings";
+        private static readonly HttpClient client = new HttpClient();
 
         public static CosmosClient getConnection(ILogger log)
         {
@@ -101,18 +104,31 @@ public class Rating
             log.LogInformation("Inserting rating ...");
 
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            Rating data = JsonConvert.DeserializeObject<Rating>(requestBody);
-            //data.id = "";
-            //data.timestamp = "";
+            RatingDb data = JsonConvert.DeserializeObject<RatingDb>(requestBody);
+            data.id =   Guid.NewGuid().ToString();
+            data.timestamp = DateTime.Now.ToUniversalTime().ToString();
 
             try
             {
-                /*
+                if (checkUserId(data.userId) == false) throw new Exception("User not found");
+                if (checkProductId(data.productId) == false) throw new Exception("Product not found");
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Not found");
+                return new NotFoundObjectResult(ex.Message);
+            }
+
+            try
+            {
+                if (data.rating < 0 || data.rating > 5) throw new Exception("Illegal rating");
+
+
                 CosmosClient cosmo = getConnection(log);
                 Database database = await cosmo.CreateDatabaseIfNotExistsAsync(databaseId);
                 Container container = await database.CreateContainerIfNotExistsAsync(containerId, "/userId");
-                ItemResponse<Rating> resp = await container.CreateItemAsync<Rating>(data);
-                */
+                ItemResponse<RatingDb> resp = await container.CreateItemAsync<RatingDb>(data);
+                
                 // validate and check the data
                 // insert
 
@@ -126,6 +142,30 @@ public class Rating
             return new OkObjectResult(data);
         }
 
+        public static bool checkUserId(string userId)
+        {
+            // https://serverlessohapi.azurewebsites.net/api/GetUser?userId=cc20a6fb-a91f-4192-874d-132493685376
+            client.DefaultRequestHeaders.Accept.Clear();
+            client.DefaultRequestHeaders.Accept.Add(
+                new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Add("User-Agent", "openhack client");
+
+            var ret = client.GetStringAsync($"https://serverlessohapi.azurewebsites.net/api/GetUser?userId={userId}").Result;
+            return ret.Contains("userName");
+        }
+        public static bool checkProductId(string productId)
+        {
+            // https://serverlessohapi.azurewebsites.net/api/GetProduct?productId=75542e38-563f-436f-adeb-f426f1dabb5c
+            client.DefaultRequestHeaders.Accept.Clear();
+            client.DefaultRequestHeaders.Accept.Add(
+                new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Add("User-Agent", "openhack client");
+
+            var ret = client.GetStringAsync($"https://serverlessohapi.azurewebsites.net/api/GetProduct?productId={productId}").Result;
+            return ret.Contains("productName");
+        }
+
+        // http://localhost:7071/api/GetRating?ratingId=c3b9b8a8-e51f-45ae-b8f4-2c154a94e80e
         // https://petsastep3test.azurewebsites.net/api/Getrating?ratingId=1234
         // http://localhost:7071/api/GetRating?ratingId=123
         [FunctionName("GetRating")]
@@ -141,15 +181,36 @@ public class Rating
             try
             {
                 // get the rating with key
-            }
+                CosmosClient cosmo = getConnection(log);
+                Database database = await cosmo.CreateDatabaseIfNotExistsAsync(databaseId);
+                Container container = await database.CreateContainerIfNotExistsAsync(containerId, "/userId");
+
+                var sqlQueryText = $"SELECT * FROM c WHERE c.id = '{ratingId}'";
+
+                QueryDefinition queryDefinition = new QueryDefinition(sqlQueryText);
+                FeedIterator<RatingDb> queryResultSetIterator = container.GetItemQueryIterator<RatingDb>(queryDefinition);
+
+                List<RatingDb> ratings = new List<RatingDb>();
+
+                while (queryResultSetIterator.HasMoreResults)
+                {
+                    FeedResponse<RatingDb> currentResultSet = await queryResultSetIterator.ReadNextAsync();
+                    foreach (RatingDb f in currentResultSet)
+                    {
+                        ratings.Add(f);
+                    }
+                }
+                data =  ratings[0];
+            }            
             catch (Exception ex)
             {
-                log.LogError(ex, "Insert");
+                log.LogError(ex, "Search with key");
                 return new BadRequestObjectResult(ex.Message);
             }
             return new OkObjectResult(data);
         }
 
+        // http://localhost:7071/api/GetRatings?userId=cc20a6fb-a91f-4192-874d-132493685376
         // https://petsastep3test.azurewebsites.net/api/Getratings?userId=1234
         // http://localhost:7071/api/GetRatings?userId=123
         [FunctionName("GetRatings")]
@@ -159,14 +220,29 @@ public class Rating
         {
             log.LogInformation("get Ratings for user");
 
-            // get the all Users from database 
+            // get the all Users ratings from database 
+            string userId = req.Query["userId"];
             List<RatingDb> data = new List<RatingDb>();
 
             try
             {
-                data.Add(new RatingDb());
-                data.Add(new RatingDb());
-                // get the rating with key
+                CosmosClient cosmo = getConnection(log);
+                Database database = await cosmo.CreateDatabaseIfNotExistsAsync(databaseId);
+                Container container = await database.CreateContainerIfNotExistsAsync(containerId, "/userId");
+
+                var sqlQueryText = $"SELECT * FROM c WHERE c.userId = '{userId}'";
+
+                QueryDefinition queryDefinition = new QueryDefinition(sqlQueryText);
+                FeedIterator<RatingDb> queryResultSetIterator = container.GetItemQueryIterator<RatingDb>(queryDefinition);
+
+                while (queryResultSetIterator.HasMoreResults)
+                {
+                    FeedResponse<RatingDb> currentResultSet = await queryResultSetIterator.ReadNextAsync();
+                    foreach (RatingDb f in currentResultSet)
+                    {
+                        data.Add(f);
+                    }
+                }
             }
             catch (Exception ex)
             {
