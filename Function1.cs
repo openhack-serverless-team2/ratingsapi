@@ -101,12 +101,16 @@ public class Rating
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req,
             ILogger log)
         {
-            log.LogInformation("Inserting rating ...");
+            log.LogInformation("Inserting rating ...1 ");
 
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            log.LogInformation("Inserting rating ...2 ");
             RatingDb data = JsonConvert.DeserializeObject<RatingDb>(requestBody);
+            log.LogInformation("Inserting rating ...3 ");
             data.id =   Guid.NewGuid().ToString();
+            log.LogInformation("Inserting rating ...4 ");
             data.timestamp = DateTime.Now.ToUniversalTime().ToString();
+            log.LogInformation("Inserting rating ...5 ");
 
             try
             {
@@ -123,7 +127,7 @@ public class Rating
             {
                 if (data.rating < 0 || data.rating > 5) throw new Exception("Illegal rating");
 
-
+                log.LogInformation("Inserting rating ...6 ");
                 CosmosClient cosmo = getConnection(log);
                 Database database = await cosmo.CreateDatabaseIfNotExistsAsync(databaseId);
                 Container container = await database.CreateContainerIfNotExistsAsync(containerId, "/userId");
@@ -205,7 +209,7 @@ public class Rating
             catch (Exception ex)
             {
                 log.LogError(ex, "Search with key");
-                return new BadRequestObjectResult(ex.Message);
+                return new NotFoundObjectResult(ex.Message);
             }
             return new OkObjectResult(data);
         }
@@ -247,7 +251,7 @@ public class Rating
             catch (Exception ex)
             {
                 log.LogError(ex, "Insert");
-                return new BadRequestObjectResult(ex.Message);
+                return new NotFoundObjectResult(ex.Message);
             }
             return new OkObjectResult(data);
         }
