@@ -106,7 +106,7 @@ public class Rating
             log.LogInformation("Inserting rating ...1 ");
 
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            log.LogInformation("Inserting rating ...2 ");
+            log.LogInformation($"Inserting rating ...2  {requestBody}");
             RatingDb data = JsonConvert.DeserializeObject<RatingDb>(requestBody);
             log.LogInformation("Inserting rating ...3 ");
             data.id =   Guid.NewGuid().ToString();
