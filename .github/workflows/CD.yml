@@ -1,7 +1,11 @@
-name: CI
+name: CD
 
 on:
-  [push]
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: 
+      - completed
 
 env:
   AZURE_FUNCTIONAPP_NAME: step3team2ratingsapi  # set this to your application's name
@@ -13,22 +17,8 @@ jobs:
     runs-on: windows-latest
     environment: dev
     steps:
-    - name: 'Checkout GitHub Action'
-      uses: actions/checkout@master
-
-    - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
-      uses: actions/setup-dotnet@v1
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-
-    - name: 'Resolve Project Dependencies Using Dotnet'
-      shell: pwsh
-      run: |
-        pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
-        dotnet build --configuration Release --output ./output
-        popd
-    - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v2.2.4
+    - name: Download a Build Artifact
+      uses: actions/download-artifact@v2.0.10
       with:
         name: ratingsapi
         path: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
